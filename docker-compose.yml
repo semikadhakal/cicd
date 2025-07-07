@@ -1,0 +1,38 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: semika
+      POSTGRES_PASSWORD: semika
+      POSTGRES_DB: container-db
+    ports:
+      - "5432:5432"
+
+  backend1:
+    build: ./backend1
+    ports:
+      - "3000:3000"
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgres://admin:adminpass@db:5432/myapp
+
+  backend2:
+    build: ./backend2
+    ports:
+      - "3001:3001"
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgres://admin:adminpass@db:5432/myapp
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend1
+      - backend2
+
