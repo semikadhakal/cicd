@@ -1,0 +1,99 @@
+name: Dev Build and Push
+on:
+  pull_request:
+    branches: ["dev"]
+  push:
+    branches:
+      - dev
+env:
+  REGISTRY: docker.io
+  FRONTEND_IMAGE_NAME: semikadhakal123/frontend
+  BACKEND1_IMAGE_NAME: semikadhakal123/backend1
+  BACKEND2_IMAGE_NAME: semikadhakal123/backend2
+jobs:
+  commitlint:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'feature') && github.base_ref == 'dev'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install Commitlint
+        run: |
+          npm install --save-dev @commitlint/cli @commitlint/config-conventional
+      - name: Add commitlint config
+        run: |
+          echo "module.exports = {extends: ['@commitlint/config-conventional']};" > commitlint.config.js
+      - name: Run Commitlint
+        run: |
+          git log origin/${{ github.base_ref }}..HEAD --pretty=format:"%s" | npx commitlint
+  checK_lint:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'feature') && github.base_ref == 'dev'
+    needs: ["commitlint"]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Install packages of backend2
+        working-directory: backend2
+        run: yarn
+      - name: Install packages of backend1
+        working-directory: backend1
+        run: yarn
+      - name: Install packages of frontend
+        working-directory: frontend
+        run: yarn
+      - name: Run lint on backend1
+        working-directory: backend1
+        run: yarn lint
+      - name: Run lint on backend2
+        working-directory: backend2
+        run: yarn lint
+      - name: Run lint on frontend
+        working-directory: frontend
+        run: yarn lint
+  build_docker:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Log in to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build and Push Backend1 Image
+        uses: docker/build-push-action@v5
+        with:
+          context: backend1
+          file: backend1/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.BACKEND1_IMAGE_NAME }}:dev-${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.BACKEND1_IMAGE_NAME }}:dev-latest
+      - name: Build and Push Backend2 Image
+        uses: docker/build-push-action@v5
+        with:
+          context: backend2
+          file: backend2/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.BACKEND2_IMAGE_NAME }}:dev-${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.BACKEND2_IMAGE_NAME }}:dev-latest
+      - name: Build and Push Frontend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: frontend
+          file: frontend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:dev-${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:dev-latest
